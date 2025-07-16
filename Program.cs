@@ -72,7 +72,7 @@ class Program
         }
 
         // Počkáme na stisk klávesy pro ukončení konzole
-        Console.WriteLine("Stiskněte libovolnou klávesu pro ukončení...");
-        Console.ReadKey();
+        //.WriteLine("Stiskněte libovolnou klávesu pro ukončení...");
+        //Console.ReadKey();
     }
 }
