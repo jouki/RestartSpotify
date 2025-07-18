@@ -1,59 +1,58 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 class Program
 {
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+    private const byte VK_MEDIA_PLAY_PAUSE = 0xB3;
+    private const byte VK_SPACE = 0x20;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint WM_CLOSE = 0x0010;
+
     static void Main(string[] args)
     {
-        // Najdeme a ukončíme všechny procesy s názvem "Spotify"
         Process[] spotifyProcesses = Process.GetProcessesByName("Spotify");
         if(spotifyProcesses.Length > 0)
         {
-            Console.WriteLine("Ukončuji procesy Spotify...");
             foreach(Process process in spotifyProcesses)
             {
                 try
                 {
-                    process.Kill();
-                    process.WaitForExit(); // Počkáme, až proces skončí
-                    Console.WriteLine($"Proces {process.Id} ukončen.");
+                    if(process.MainWindowHandle != IntPtr.Zero)
+                    {
+                        PostMessage(process.MainWindowHandle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                    }
+                    process.WaitForExit(5000);
                 }
-                catch(Exception ex)
+                catch
                 {
-                    Console.WriteLine($"Chyba při ukončování procesu: {ex.Message}");
                 }
             }
         }
-        else
-        {
-            Console.WriteLine("Žádný proces Spotify neběží.");
-        }
 
-        // Spustíme Spotify - nejprve zkusíme původní cestu pro desktop verzi
         string spotifyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Spotify", "Spotify.exe");
         bool started = false;
 
         if(File.Exists(spotifyPath))
         {
-            Console.WriteLine("Spouštím Spotify z desktop cesty...");
             try
             {
                 Process.Start(spotifyPath);
-                Console.WriteLine("Spotify byl úspěšně restartován (desktop verze).");
                 started = true;
             }
-            catch(Exception ex)
+            catch
             {
-                Console.WriteLine($"Chyba při spuštění z desktop cesty: {ex.Message}. Zkouším alternativu...");
             }
         }
-        else
-        {
-            Console.WriteLine("Desktop cesta nenalezena. Zkouším UWP verzi...");
-        }
 
-        // Pokud desktop verze selhala nebo neexistuje, zkusíme UWP přes URI scheme
         if(!started)
         {
             try
@@ -63,16 +62,37 @@ class Program
                     FileName = "spotify:",
                     UseShellExecute = true
                 });
-                Console.WriteLine("Spotify byl úspěšně restartován (UWP verze).");
+                started = true;
             }
-            catch(Exception ex)
+            catch
             {
-                Console.WriteLine($"Chyba při spuštění UWP verze: {ex.Message}. Zkontrolujte instalaci Spotify.");
             }
         }
 
-        // Počkáme na stisk klávesy pro ukončení konzole
-        //.WriteLine("Stiskněte libovolnou klávesu pro ukončení...");
-        //Console.ReadKey();
+        if(started)
+        {
+            Thread.Sleep(1000);
+            try
+            {
+                var spotifyProcess = Process.GetProcessesByName("Spotify").FirstOrDefault();
+                if(spotifyProcess != null)
+                {
+                    SetForegroundWindow(spotifyProcess.MainWindowHandle);
+                    keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
+                    keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0);
+                }
+            }
+            catch
+            {
+                try
+                {
+                    keybd_event(VK_SPACE, 0, 0, 0);
+                    keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0);
+                }
+                catch
+                {
+                }
+            }
+        }
     }
-}
+} 
